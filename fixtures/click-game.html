@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>Click Game / A-V fixture</title>
+<style>body{margin:0;background:#101326;color:white;font:24px sans-serif}canvas{display:block}button{position:absolute;left:20px;top:20px;font:24px sans-serif;padding:16px}#score{position:absolute;left:240px;top:40px}</style>
+<canvas width="1280" height="720"></canvas><button id="start">Start game</button><div id="score">Score: 0</div>
+<script>
+let score=0,started=false,audio,next=0,flash=0;
+const c=document.querySelector('canvas'),g=c.getContext('2d');
+document.querySelector('button').onclick=()=>{started=true;audio=new AudioContext();audio.resume();document.querySelector('button').textContent='Running';next=performance.now()+1000;};
+c.onclick=()=>{if(started)document.querySelector('#score').textContent='Score: '+(++score);};
+function draw(t){g.fillStyle=t<flash?'white':'#101326';g.fillRect(0,0,1280,720);g.fillStyle='#42dbc5';g.beginPath();g.arc(640+200*Math.sin(t/900),360,65,0,Math.PI*2);g.fill();
+if(started&&t>=next){flash=t+100;next+=2000;const o=audio.createOscillator(),v=audio.createGain();o.frequency.value=880;v.gain.value=.15;o.connect(v).connect(audio.destination);o.start();o.stop(audio.currentTime+.1);}
+requestAnimationFrame(draw);}requestAnimationFrame(draw);
+</script>

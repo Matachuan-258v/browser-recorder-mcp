@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Game Browser Recorder",
+  "version": "0.1.0",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "offscreen",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_title": "Record this game"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
