@@ -1,17 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {launchOptions} from '../src/browser.mjs';
-test('ordinary Chrome defaults have no container or GPU requirements',()=>{
- const opts=launchOptions({});
- assert.equal(opts.channel,'chrome');assert.equal(opts.pipe,true);assert.equal(opts.enableExtensions,true);
- assert.equal(opts.env,undefined);assert.equal(opts.userDataDir,undefined);
- assert.ok(!opts.args.some(a=>/sandbox|wayland|zink|webgl|alsa/.test(a)));
+import {devtoolsOptions} from '../src/devtools.mjs';
+test('DevTools owns an isolated Chrome with all public tool categories enabled',()=>{
+ const opts=devtoolsOptions({});
+ assert.equal(opts.channel,'stable');assert.equal(opts.isolated,true);assert.equal(opts.categoryExtensions,true);
+ assert.equal(opts.categoryPwa,true);assert.equal(opts.categoryExperimentalWebmcp,true);
+ assert.equal(opts.experimentalScreencast,true);assert.equal(opts.experimentalVision,true);assert.equal(opts.memoryDebugging,true);
+ assert.equal(opts.browserUrl,undefined);assert.equal(opts.wsEndpoint,undefined);
+ assert.ok(!opts.chromeArg.some(a=>/sandbox|wayland|zink|webgl|alsa/.test(a)));
 });
-test('browser executable and environment-specific arguments are configurable',()=>{
- const opts=launchOptions({CHROME_PATH:'/custom/Chrome',CHROME_ARGS:'["--ozone-platform=wayland"]'});
+test('browser executable and GPU arguments pass through to DevTools without overriding lifecycle',()=>{
+ const opts=devtoolsOptions({CHROME_PATH:'/custom/Chrome',CHROME_ARGS:'["--ozone-platform=wayland"]'});
  assert.equal(opts.executablePath,'/custom/Chrome');assert.equal(opts.channel,undefined);
- assert.ok(opts.args.includes('--ozone-platform=wayland'));
- assert.throws(()=>launchOptions({CHROME_ARGS:'{}'}),/JSON array/);
- assert.throws(()=>launchOptions({CHROME_ARGS:'[1]'}),/JSON array/);
- assert.throws(()=>launchOptions({CHROME_ARGS:'--flag'}),/JSON array/);
+ assert.ok(opts.chromeArg.includes('--ozone-platform=wayland'));
+ for(const value of ['{}','[1]','--flag'])assert.throws(()=>devtoolsOptions({CHROME_ARGS:value}),/JSON array/);
+ for(const flag of ['--remote-debugging-port=9222','--user-data-dir=/tmp/profile'])assert.throws(()=>devtoolsOptions({CHROME_ARGS:JSON.stringify([flag])}),/DevTools manages/);
 });

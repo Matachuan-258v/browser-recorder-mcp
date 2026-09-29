@@ -4,7 +4,7 @@ import http from 'node:http';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {launchBrowser} from './browser.mjs';
+import {DevTools} from './devtools.mjs';
 const exec=promisify(execFile);
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const root=path.resolve(import.meta.dirname,'..');
@@ -13,30 +13,49 @@ export function validateURL(value) {
   if(!['http:','https:'].includes(url.protocol))throw Error('Only http and https URLs are allowed.');
   return url.href;
 }
-export function validatePoint(x,y,width,height){
-  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=width||y>=height)throw Error('Click coordinates are outside the viewport.');
-}
 export class GameBrowser {
-  constructor(){
+  constructor(devtools=new DevTools()){
+    this.devtools=devtools;
     this.dir=path.resolve(process.env.GAME_DATA_DIR||path.join(root,'artifacts','recordings'));this.width=1280;this.height=720;
     this.token=randomBytes(32).toString('hex');this.record=null;this.browser=null;this.http=null;
   }
-  async init(){
-    if(this.browser)return;
+  async prepare(){
+    if(this.http)return;
     await fs.mkdir(this.dir,{recursive:true});
     this.http=http.createServer((req,res)=>this.receive(req,res).catch(error=>{res.statusCode=400;res.end(String(error));}));
     await new Promise((resolve,reject)=>{this.http.once('error',reject);this.http.listen(0,'127.0.0.1',resolve);});
     this.endpoint='http://127.0.0.1:'+this.http.address().port;
-    try{
-    this.browser=await launchBrowser();
-    this.extensionId=await this.browser.installExtension(path.join(root,'extension'));
-    this.page=await this.browser.newPage();
-    this.page.setDefaultTimeout(15000);
-    for(const p of await this.browser.pages())if(p!==this.page&&p.url()==='about:blank')await p.close();
-    }catch(error){
-      await this.browser?.close().catch(()=>{});this.browser=null;
-      await new Promise(resolve=>this.http.close(resolve));this.http=null;throw error;
+  }
+  async init(pageId){
+    await this.prepare();
+    const {browser,page}=await this.devtools.pageForRecording(pageId);
+    if(this.browser!==browser){
+      this.browser=browser;
+      browser.once('disconnected',()=>{
+        if(this.browser!==browser)return;
+        this.interrupt('Chrome disconnected; the recording cannot continue.');
+        this.browser=null;this.extensionId=null;
+      });
+      this.extensionId=null;
     }
+    if(!this.extensionId||!(await browser.extensions()).has(this.extensionId)){
+      this.extensionId=await browser.installExtension(path.join(root,'extension'));
+    }
+    this.unwatchPage?.();this.page=page;
+    const onClose=()=>this.interrupt('The recorded page was closed.');
+    const onError=()=>this.interrupt('The recorded page crashed.');
+    // Navigation from page JS or a click cannot be intercepted by tool routing.
+    const onNavigate=frame=>{if(frame===page.mainFrame()&&this.isRecording())this.scheduleStop?.();};
+    page.on('close',onClose);page.on('error',onError);page.on('framenavigated',onNavigate);
+    this.unwatchPage=()=>{page.off('close',onClose);page.off('error',onError);page.off('framenavigated',onNavigate);};
+  }
+  isRecording(){return Boolean(this.record&&['starting','recording','stopping','captured','finalizing'].includes(this.record.state));}
+  interrupt(message){
+    if(!this.isRecording()||['captured','finalizing'].includes(this.record.state))return;
+    clearTimeout(this.record.timer);this.record.state='error';this.record.error=message;
+    // Preserve uploaded data and the failure reason, rather than reporting success.
+    this.failureSave=fs.writeFile(path.join(this.dir,this.record.id+'.json'),JSON.stringify(this.recordStatus(),null,2)).catch(console.error);
+    if(this.browser?.connected)this.interruptCleanup=this.worker().then(worker=>worker.evaluate(()=>chrome.runtime.sendMessage({to:'recorder',op:'stop'}))).catch(()=>{});
   }
   async worker(){
     const target=await this.browser.waitForTarget(t=>t.type()==='service_worker'&&t.url().startsWith('chrome-extension://'+this.extensionId+'/'),{timeout:10000});
@@ -66,36 +85,14 @@ export class GameBrowser {
         if(message.chunks!==r.nextSequence)throw Error('Chunk count mismatch');
         if(!['recording','stopping'].includes(r.state))throw Error('Unexpected recording stop');
         r.state='captured';
+        this.scheduleStop?.();
       }else if(message.state==='error'){r.state='error';r.error=message.error||'Recorder failed';}
       else throw Error('Invalid recording event');
     }else{res.statusCode=404;res.end();return;}
     res.end('ok');
   }
-  async open(url){
-    await this.init();
-    if(this.record&&['starting','recording','stopping','captured','finalizing'].includes(this.record.state))throw Error('Stop the recording before navigating.');
-    await this.page.goto(validateURL(url),{waitUntil:'domcontentloaded',timeout:30000});
-    await delay(250);
-    return this.status();
-  }
-  async status(){
-    await this.init();
-    const page=await this.page.evaluate(()=>({url:location.href,title:document.title,width:innerWidth,height:innerHeight}));
-    return {...page,...(process.env.GAME_TEST_FIXTURES==='1'?{fixtureUrl:this.endpoint+'/fixture'}:{}),browserVersion:await this.browser.version(),recording:this.recordStatus()};
-  }
-  async screenshot(){
-    await this.init();
-    const data=await this.page.screenshot({type:'png',fullPage:false});
-    return {image:Buffer.from(data).toString('base64'),width:this.width,height:this.height,url:this.page.url(),coordinateSpace:'CSS viewport pixels; deviceScaleFactor=1'};
-  }
-  async click({x,y,button='left',clickCount=1,waitMs=300,screenshot=true}){
-    await this.init();validatePoint(x,y,this.width,this.height);
-    await this.page.mouse.click(x,y,{button,clickCount});
-    if(waitMs)await delay(waitMs);
-    return screenshot?this.screenshot():this.status();
-  }
   recordStatus(){
-    if(!this.record)return {state:'idle'};
+    if(!this.record)return {state:'idle',...(process.env.GAME_TEST_FIXTURES==='1'&&this.endpoint?{fixtureUrl:this.endpoint+'/fixture'}:{})};
     const {timer,...record}=this.record;return record;
   }
   async waitRecord(states,timeout=20000){
@@ -107,16 +104,19 @@ export class GameBrowser {
     }
     throw Error('Recorder timed out in state '+this.record.state);
   }
-  async startRecording({fps=30,bitrate=6000000,maxSeconds=300}={}){
-    await this.init();
+  async startRecording({pageId,fps=30,bitrate=6000000,maxSeconds=300}={}){
     if(this.record&&!['finished','error'].includes(this.record.state))throw Error('A recording is already active.');
+    await this.interruptCleanup;await this.failureSave;
+    await this.init(pageId);
     validateURL(this.page.url());
     try{
       await exec(process.env.FFMPEG_PATH||'ffmpeg',['-version'],{timeout:10000});
       await exec(process.env.FFPROBE_PATH||'ffprobe',['-version'],{timeout:10000});
     }catch(error){throw Error('Recording requires FFmpeg and ffprobe. Set FFMPEG_PATH / FFPROBE_PATH or add them to PATH. '+error.message);}
     const id=randomUUID();
-    this.record={id,state:'starting',rawPath:path.join(this.dir,id+'.raw.webm'),nextSequence:0,bytes:0,fps,bitrate,maxSeconds};
+    const dimensions=await this.page.evaluate(()=>({width:innerWidth,height:innerHeight}));
+    this.width=dimensions.width;this.height=dimensions.height;
+    this.record={id,pageId,width:this.width,height:this.height,state:'starting',rawPath:path.join(this.dir,id+'.raw.webm'),nextSequence:0,bytes:0,fps,bitrate,maxSeconds};
     await fs.writeFile(this.record.rawPath,'',{flag:'wx'});
     let worker;
     try{
@@ -128,7 +128,7 @@ export class GameBrowser {
       const extension=(await this.browser.extensions()).get(this.extensionId);
       await extension.triggerAction(this.page);
       await this.waitRecord(['recording']);
-      this.record.timer=setTimeout(()=>this.stopRecording(id).catch(e=>console.error('Automatic stop:',e)),maxSeconds*1000);
+      this.record.timer=setTimeout(()=>this.scheduleStop?.(),maxSeconds*1000);
       return this.recordStatus();
     }catch(e){
       this.record.state='error';this.record.error=String(e);
@@ -164,11 +164,14 @@ export class GameBrowser {
     }catch(e){r.state='error';r.error=String(e);throw e;}
   }
   async close(){
-    if(this.record&&['recording','stopping','captured'].includes(this.record.state)){
+    if(this.isRecording()){
       try{await this.stopRecording(this.record.id);}catch(e){console.error('Recording shutdown:',e);}
     }
     clearTimeout(this.record?.timer);
-    if(this.browser)await this.browser.close();
-    if(this.http)await new Promise(resolve=>this.http.close(resolve));
+    this.unwatchPage?.();
+    await this.interruptCleanup;await this.failureSave;
+    // Browser shutdown belongs exclusively to DevTools.
+    this.browser=null;this.page=null;
+    if(this.http){this.http.closeAllConnections();await new Promise(resolve=>this.http.close(resolve));this.http=null;}
   }
 }

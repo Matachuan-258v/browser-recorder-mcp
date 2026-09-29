@@ -1,0 +1,30 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {GameBrowser} from '../src/runtime.mjs';
+
+test('recording borrows DevTools pages, tracks interruptions and never closes Chrome',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'recorder-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const page=new EventEmitter();page.mainFrame=()=>page;
+ const browser=new EventEmitter();browser.connected=true;
+ let installed=0,closed=0,stopped=0;
+ browser.installExtension=async()=>{installed++;return 'recorder';};
+ browser.extensions=async()=>new Map([['recorder',{}]]);
+ browser.close=async()=>{closed++;};
+ const runtime=new GameBrowser({async pageForRecording(id){assert.equal(id,7);return {browser,page};}});
+ runtime.dir=dir;runtime.prepare=async()=>{};
+ runtime.worker=async()=>({evaluate:async()=>{stopped++;}});
+ runtime.scheduleStop=()=>{stopped++;};
+ await runtime.init(7);assert.equal(installed,1);
+ runtime.record={id:'test',state:'recording',pageId:7};
+ page.emit('framenavigated',page);assert.equal(stopped,1);
+ page.emit('close');assert.equal(runtime.recordStatus().state,'error');
+ await runtime.failureSave;assert.match(JSON.parse(await readFile(join(dir,'test.json'))).error,/closed/);
+ await runtime.interruptCleanup;assert.equal(stopped,2);
+ runtime.record={id:'lost',state:'recording',pageId:7};browser.connected=false;browser.emit('disconnected');
+ assert.equal(runtime.browser,null);assert.match(runtime.recordStatus().error,/disconnected/);
+ await runtime.close();assert.equal(closed,0);
+});

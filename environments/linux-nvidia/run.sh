@@ -15,6 +15,7 @@ data_dir="$(cd "$data_dir" && pwd)"
 docker run -d --name "$name" \
   --device "nvidia.com/gpu=$gpu" \
   --shm-size 1g \
+  -e MCP_TOKEN -e MCP_HOSTC \
   -p "${port}:3000" \
   -v "${data_dir}:/data" \
   "$image"

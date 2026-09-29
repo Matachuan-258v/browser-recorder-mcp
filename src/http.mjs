@@ -1,5 +1,5 @@
 import http from 'node:http';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID,timingSafeEqual} from 'node:crypto';
 import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {isInitializeRequest} from '@modelcontextprotocol/sdk/types.js';
 import {GameBrowser} from './runtime.mjs';
@@ -26,7 +26,9 @@ function readBody(req){
   });
 }
 
-export async function startHttpServer({host='0.0.0.0',port=3000,idleMs=1800000,createRuntime=()=>new GameBrowser()}={}){
+export async function startHttpServer({host='0.0.0.0',port=3000,token,idleMs=1800000,createRuntime=()=>new GameBrowser()}={}){
+  if(typeof token!=='string'||token.length<32||!/^[-A-Za-z0-9._~+/]+=*$/.test(token))throw Error('MCP_TOKEN must contain at least 32 Bearer-token characters');
+  const tokenHash=createHash('sha256').update(token).digest();
   if(!Number.isInteger(port)||port<0||port>65535)throw Error('Invalid MCP_PORT');
   if(!Number.isFinite(idleMs)||idleMs<=0)throw Error('MCP_SESSION_IDLE_SECONDS must be positive');
   let active=null,closing=false,closePromise;
@@ -40,17 +42,22 @@ export async function startHttpServer({host='0.0.0.0',port=3000,idleMs=1800000,c
     clearTimeout(session.timer);
     if(session.closing)return;
     session.timer=setTimeout(()=>{
-      const recording=session.app.runtime.recordStatus().state;
-      if(session.app.pending||['starting','recording','stopping','captured','finalizing'].includes(recording)){touch(session);return;}
+      if(session.app.pending||session.app.recordingActive){touch(session);return;}
       dispose(session).catch(console.error);
     },idleMs);
     session.timer.unref();
   }
   async function route(req,res){
+    // Authenticate before reading bodies, inspecting sessions, or disclosing health state.
+    const bearer=/^Bearer +([-A-Za-z0-9._~+/]+=*)$/i.exec(req.headers.authorization||'');
+    if(!bearer||!timingSafeEqual(tokenHash,createHash('sha256').update(bearer[1]).digest())){
+      res.setHeader('WWW-Authenticate','Bearer realm="mcp"');
+      error(res,401,'Unauthorized');return;
+    }
     const url=new URL(req.url,'http://localhost');
     if(closing){error(res,503,'Service is shutting down');return;}
     if(req.method==='GET'&&url.pathname==='/health'){
-      json(res,200,{status:'ok',transport:'streamable-http',session:active?(active.closing?'closing':'active'):'idle',browserStarted:Boolean(active?.app.runtime.browser)});return;
+      json(res,200,{status:'ok',transport:'streamable-http',session:active?(active.closing?'closing':'active'):'idle',browserStarted:Boolean(active?.app.browserStarted)});return;
     }
     if(url.pathname!=='/mcp'){error(res,404,'Not found');return;}
     if(!['GET','POST','DELETE'].includes(req.method)){res.setHeader('Allow','GET, POST, DELETE');error(res,405,'Method not allowed');return;}

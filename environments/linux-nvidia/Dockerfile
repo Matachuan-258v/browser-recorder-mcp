@@ -35,6 +35,7 @@ COPY environments/linux-nvidia/entrypoint.sh /app/entrypoint.sh
 COPY environments/linux-nvidia/smoke.sh /app/smoke.sh
 ENV CHROME_PATH=/usr/bin/google-chrome
 ENV GAME_DATA_DIR=/data
+ENV MCP_ENV_FILE=/data/.env
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=3000
 # Ask the container runtime for the driver features Chrome needs.

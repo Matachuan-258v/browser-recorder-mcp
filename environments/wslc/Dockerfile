@@ -35,6 +35,7 @@ COPY environments/wslc/entrypoint.sh /app/entrypoint.sh
 COPY environments/wslc/smoke.sh /app/smoke.sh
 ENV CHROME_PATH=/usr/bin/google-chrome
 ENV GAME_DATA_DIR=/data
+ENV MCP_ENV_FILE=/data/.env
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=3000
 EXPOSE 3000

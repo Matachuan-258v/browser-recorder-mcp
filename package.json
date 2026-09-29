@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "puppeteer-core": "25.11.0",
+    "chrome-devtools-mcp": "1.10.1",
     "zod": "4.6.5"
   },
   "engines": {

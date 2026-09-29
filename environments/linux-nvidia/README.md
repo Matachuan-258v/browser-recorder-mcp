@@ -35,23 +35,27 @@ GPU=0 PORT=3000 DATA_DIR=/srv/recordings ./environments/linux-nvidia/run.sh
 
 `GPU` 选择 CDI 设备序号（多卡机器上对应 `nvidia-smi` 的 GPU 编号），默认 0；
 `NAME` 默认 browser-recorder-mcp；`IMAGE` 默认 game-browser-mcp:linux-nvidia；
-录像目录默认项目的 `artifacts/recordings`。
+录像目录默认项目的 `artifacts/recordings`。未设置 `MCP_TOKEN` 时，首次启动自动生成并保存到该目录的 `.env`（上例为 `/srv/recordings/.env`）。后续启动复用；也可以通过环境变量显式指定 token。
 
 等价命令：
 
 ```bash
 docker run -d --name browser-recorder-mcp --device nvidia.com/gpu=0 \
-  --shm-size 1g -p 3000:3000 -v /srv/recordings:/data game-browser-mcp:linux-nvidia
+  --shm-size 1g -e MCP_TOKEN -p 3000:3000 -v /srv/recordings:/data game-browser-mcp:linux-nvidia
 ```
 
+服务启动后，从 `/srv/recordings/.env` 读取 `MCP_TOKEN` 并设置同名 shell 变量，再执行：
+
 ```bash
-curl http://127.0.0.1:3000/health
+curl -H "Authorization: Bearer $MCP_TOKEN" http://127.0.0.1:3000/health
 docker logs browser-recorder-mcp
 docker stop browser-recorder-mcp
 docker start browser-recorder-mcp
 ```
 
 重新构建镜像后需要停止并删除旧容器再 run，新镜像不会自动替换已有容器；绑定目录中的录像会保留。
+
+设置 `MCP_HOSTC=1` 后运行 `run.sh` 可同时启动 hostc 隧道；通过 `docker logs -f browser-recorder-mcp` 查看公网地址。公网地址末尾加 `/mcp`，客户端仍需配置 Bearer token。Token 生成和隧道生命周期见[项目说明](../../README.md#token-与-hostcdev)。
 
 ## 连接 agent
 
@@ -62,17 +66,18 @@ docker start browser-recorder-mcp
   "mcpServers": {
     "browser-recorder": {
       "type": "http",
-      "url": "http://127.0.0.1:3000/mcp"
+      "url": "http://127.0.0.1:3000/mcp",
+      "headers": { "Authorization": "Bearer REPLACE_WITH_YOUR_MCP_TOKEN" }
     }
   }
 }
 ```
 
-服务不做 token 认证；能访问端口的客户端可以建立会话并操作浏览器。同时只允许一个活动会话，
+服务要求 `Authorization: Bearer <MCP_TOKEN>`；将示例中的占位符替换为服务端配置的 token。同时只允许一个活动会话，
 第二个初始化请求返回 409。需要并行 agent 时启动多个容器，使用不同的 `NAME`、`PORT`、
 `DATA_DIR`，以及不同的 `GPU`。
 
-/health、MCP 初始化和列出工具不会启动 Chrome；Weston 随容器启动，首次浏览器工具调用才启动 Chrome。
+/health、MCP 初始化和列出工具不会启动 Chrome；Weston 随容器启动，首次浏览器工具调用由 DevTools 启动 Chrome。
 
 ## 测试
 
@@ -98,3 +103,5 @@ GPU=0 ./environments/linux-nvidia/test.sh
 环境差异全部通过 `CHROME_ARGS` 注入。
 
 当前环境以 root 运行 Chrome，并使用 `--no-sandbox`。GPU 图形渲染与视频硬件编码是独立的能力。
+
+工具全量开放、`pageId` 参数以及录制期间的冲突规则见[项目工具说明](../../README.md#架构与工具)。旧 `browser_*` 工具已由 DevTools 原生工具替代。Chrome 生命周期由 DevTools 负责。
