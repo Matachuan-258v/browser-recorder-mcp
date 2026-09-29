@@ -38,6 +38,18 @@ curl.exe http://127.0.0.1:3000/health
 
 详细构建参数和数据目录见 [Windows wslc 部署说明](environments/wslc/README.md)。
 
+## 原生 Linux + NVIDIA
+
+在装有 NVIDIA 专有驱动和 NVIDIA Container Toolkit 的 Linux 主机上：
+
+```bash
+./environments/linux-nvidia/build.sh
+GPU=0 PORT=3000 ./environments/linux-nvidia/run.sh
+```
+
+与 wslc 的 GPU 接入方式不同（CDI 设备直通而非 WSL 的 D3D12），工具代码和录制扩展完全共用。
+详见 [原生 Linux NVIDIA 部署说明](environments/linux-nvidia/README.md)。
+
 ## 服务与会话
 
 - `GET /health`：返回服务状态、是否有活动会话、Chrome 是否已启动；不占用会话，不启动 Chrome。
@@ -77,9 +89,9 @@ curl.exe http://127.0.0.1:3000/health
 | GAME_DATA_DIR | 项目内 `artifacts/recordings`；容器默认 `/data` |
 | FFMPEG_PATH / FFPROBE_PATH | `ffmpeg` / `ffprobe`；可指定完整路径 |
 
-工具代码位于 `src/`，录制扩展位于 `extension/`，Windows 的 GPU/显示配置位于 `environments/wslc/`。独立运行工具需要 Node 22.12+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
+工具代码位于 `src/`，录制扩展位于 `extension/`，各平台的 GPU/显示配置位于 `environments/`（Windows 为 `wslc/`，原生 Linux 为 `linux-nvidia/`）。独立运行工具需要 Node 22.12+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
 
-Chrome 使用独立临时 profile，由服务启动和关闭，不接管日常浏览器。通用工具不硬编码 GPU 后端；wslc 镜像设置 D3D12 和 Weston。原始录制分片通过独立的容器内回环服务上传，不对外开放该内部端口。
+Chrome 使用独立临时 profile，由服务启动和关闭，不接管日常浏览器。通用工具不硬编码 GPU 后端；wslc 镜像设置 D3D12 和 Weston，linux-nvidia 镜像使用 NVIDIA 原生 EGL 和 Weston。原始录制分片通过独立的容器内回环服务上传，不对外开放该内部端口。
 
 ## 端到端测试
 
