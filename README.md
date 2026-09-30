@@ -54,6 +54,31 @@ GPU=0 PORT=3000 ./environments/linux-nvidia/run.sh
 与 wslc 的 GPU 接入方式不同（CDI 设备直通而非 WSL 的 D3D12），工具代码和录制扩展完全共用。
 详见 [原生 Linux NVIDIA 部署说明](environments/linux-nvidia/README.md)。
 
+## GHCR 镜像与自动发布
+
+[镜像工作流](.github/workflows/images.yml) 先使用 Node 22.14.0 运行 `npm test`，通过后分别构建 `linux-nvidia` 和 `wslc` 两个 `linux/amd64` 镜像，发布到 `ghcr.io/matachuan-258v/browser-recorder-mcp`。PR 只测试和构建，不发布。普通 GitHub runner 不提供 NVIDIA/WSL GPU，工作流不运行 GPU 端到端测试。
+
+| 触发方式 | 发布标签示例 |
+| --- | --- |
+| 推送到 `main` | `linux-nvidia`、`wslc`，以及 `sha-<完整提交 SHA>-<环境>` |
+| 推送 `v*` Git 标签，如 `v0.1.0` | `v0.1.0-linux-nvidia`、`v0.1.0-wslc`，以及对应 SHA 标签 |
+| Actions 页面手动运行 | 选择 `main` 或 `v*` 标签时发布；其他分支只构建 |
+
+两个环境使用各自的标签，不设置通用 `latest`。版本标签不更新 `main` 对应的环境标签；需要固定部署版本时使用版本标签或镜像 digest。每次发布的完整镜像名和 digest 会显示在 Actions 运行摘要中。
+
+原生 Linux NVIDIA 用户可以直接拉取预构建镜像，再通过现有启动脚本运行：
+
+```bash
+docker pull ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia
+IMAGE=ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia GPU=0 PORT=3000 ./environments/linux-nvidia/run.sh
+```
+
+wslc 用户将手动部署命令中的镜像名替换为 `ghcr.io/matachuan-258v/browser-recorder-mcp:wslc`，见[部署说明](environments/wslc/README.md)。
+
+工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，只在镜像构建任务授予 `packages: write`，无需额外配置 PAT 或仓库 secret。CI 为 wslc 覆盖基础镜像、apt 和 npm 的镜像源，使用官方源；本地构建的默认镜像源仍按 Dockerfile 配置。镜像带有源码仓库和提交的 OCI 标签，以关联 GitHub Package 与仓库。
+
+GHCR 新建 Package 默认私有；需要匿名拉取时，仓库 owner 在该 Package 的 Settings 中将可见性设为 Public。私有镜像需先登录 GHCR，使用有 `read:packages` 权限的 PAT classic。发布权限与可见性规则参见 [GitHub Container registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
+
 ## Token 与 hostc.dev
 
 直接启动即可：服务自动加载 `.env`，优先使用非空环境变量 `MCP_TOKEN`，其次使用文件中的值。两者均未配置或为空时，生成 32 字节随机 token，以 64 字符十六进制文本写入 `.env`，后续启动自动复用。已有的其他配置和注释会保留；新写入文件在 POSIX 系统上的权限为 `0600`。文件无法保存时拒绝启动，显式配置但格式不合法的 token 也会报错。

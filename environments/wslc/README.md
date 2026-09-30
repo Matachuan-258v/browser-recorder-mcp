@@ -4,7 +4,17 @@
 
 Windows 用户推荐在 [WSL 内直接运行服务](../../README.md#windows-用户推荐-wsl)。已有 wslc 环境可继续使用本目录的镜像和手动部署命令；不再提供 PowerShell 包装脚本。以下命令在 Windows 宿主机执行。
 
-## 准备和构建
+## 使用 GHCR 镜像
+
+可直接使用 GitHub Actions 发布的 amd64 镜像：
+
+```powershell
+wslc pull ghcr.io/matachuan-258v/browser-recorder-mcp:wslc
+```
+
+将下文运行和测试命令中的 `game-browser-mcp:wslc` 替换为上述镜像名即可跳过本地构建。`wslc` 标签随 `main` 更新；固定版本可使用 `v0.1.0-wslc` 等实际已发布标签或 digest。私有 Package 需要先登录 GHCR，发布规则和可见性见[项目说明](../../README.md#ghcr-镜像与自动发布)。
+
+## 准备和本地构建
 
 复制整个项目源码到例如 `C:\game-browser-mcp`，不需要复制 node_modules、artifacts 或 .idea。Dockerfile 需要项目根目录作为构建上下文，不能只复制 Dockerfile。
 

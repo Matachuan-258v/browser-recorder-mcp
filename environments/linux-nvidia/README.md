@@ -12,7 +12,18 @@ WSL 的 `/dev/dxg` 与 Mesa D3D12 后端。
 
 宿主机无需安装 Node、Chrome 或 FFmpeg。
 
-## 构建
+## 使用 GHCR 镜像
+
+可直接拉取 GitHub Actions 发布的 amd64 镜像，无需本地构建：
+
+```bash
+docker pull ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia
+IMAGE=ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia GPU=0 PORT=3000 DATA_DIR=/srv/recordings ./environments/linux-nvidia/run.sh
+```
+
+`linux-nvidia` 标签随 `main` 更新；固定版本可使用 `v0.1.0-linux-nvidia` 等实际已发布标签或 digest。私有 Package 需要先登录 GHCR，发布规则和可见性见[项目说明](../../README.md#ghcr-镜像与自动发布)。下文使用本地构建的镜像名，也可通过 `IMAGE` 选择 GHCR 镜像。
+
+## 本地构建
 
 ```bash
 ./environments/linux-nvidia/build.sh
