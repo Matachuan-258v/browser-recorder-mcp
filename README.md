@@ -79,6 +79,58 @@ wslc 用户将手动部署命令中的镜像名替换为 `ghcr.io/matachuan-258v
 
 GHCR 新建 Package 默认私有；需要匿名拉取时，仓库 owner 在该 Package 的 Settings 中将可见性设为 Public。私有镜像需先登录 GHCR，使用有 `read:packages` 权限的 PAT classic。发布权限与可见性规则参见 [GitHub Container registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
 
+## Docker Compose
+
+[compose.yaml](compose.yaml) 面向原生 Linux NVIDIA 主机，使用 GHCR 的 `linux-nvidia` 镜像。需要 Docker Compose 2.30+、Docker 的 CDI 支持，以及已配置 NVIDIA CDI 设备的 NVIDIA Container Toolkit；GPU 前提同[原生 Linux 部署说明](environments/linux-nvidia/README.md)。wslc 的镜像和手动命令继续保留在其部署目录中。
+
+在项目根目录执行（私有 GHCR Package 需先登录）：
+
+```bash
+docker compose pull
+docker compose up -d --wait
+docker compose logs -f browser-recorder
+```
+
+默认仅将端口映射到宿主机 `127.0.0.1:3000`；客户端 URL 为 `http://127.0.0.1:3000/mcp`。录像和自动生成的 token 保存在宿主机 `artifacts/recordings/`，重建容器或执行 `docker compose down` 后仍保留。首次启动后读取该目录 `.env` 中的 `MCP_TOKEN` 配置客户端；容器写出的文件权限为 `0600`，需要宿主机相应读取权限。健康检查从显式环境变量或 `/data/.env` 读取 token，并访问受认证保护的 `/health`，不会启动 Chrome。
+
+参数可以通过 shell 环境变量或项目根目录 `.env` 设置；根目录 `.env` 用于 Compose 配置，自动生成的服务 token 写入挂载目录下的 `.env`。
+
+| 参数 | 默认值 / 用途 |
+| --- | --- |
+| `IMAGE` | `ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia`；可换成实际发布的版本标签或 digest |
+| `GPU` | `0`；NVIDIA CDI 设备编号，也可设为 `all` |
+| `MCP_BIND_ADDRESS` | `127.0.0.1`；设为 `0.0.0.0` 可监听宿主机所有 IPv4 接口 |
+| `MCP_PORT` | `3000`；宿主机端口，容器内部保持 `3000` |
+| `DATA_DIR` | `./artifacts/recordings`；宿主机持久化目录 |
+| `MCP_TOKEN` | 留空时由服务自动生成并持久化，也可显式指定 |
+| `MCP_HOSTC` | `0`；设为 `1` 启用 hostc 公网隧道，从 Compose 日志读取地址 |
+| `MCP_SESSION_IDLE_SECONDS` | `1800`；会话空闲回收时间 |
+
+例如选择 GPU、修改端口和启用 hostc：
+
+```bash
+GPU=1 MCP_PORT=3001 MCP_HOSTC=1 docker compose up -d --wait
+```
+
+更新镜像、停止或删除容器：
+
+```bash
+docker compose pull
+docker compose up -d --wait
+docker compose stop
+docker compose down
+```
+
+服务退出时按 `unless-stopped` 策略重启；正常停止最多等待 3 分钟，让执行中的工具和录制完成清理。使用 `docker compose -p <项目名>` 和不同的端口、数据目录可运行多个独立实例。
+
+需要从本地源码构建时叠加 [compose.build.yaml](compose.build.yaml)：
+
+```bash
+docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait
+```
+
+本地构建默认镜像名为 `game-browser-mcp:linux-nvidia`，可用 `IMAGE` 和 `BASE_IMAGE` 覆盖镜像名与基础镜像。之后管理该实例时使用相同的两个 `-f` 参数。
+
 ## Token 与 hostc.dev
 
 直接启动即可：服务自动加载 `.env`，优先使用非空环境变量 `MCP_TOKEN`，其次使用文件中的值。两者均未配置或为空时，生成 32 字节随机 token，以 64 字符十六进制文本写入 `.env`，后续启动自动复用。已有的其他配置和注释会保留；新写入文件在 POSIX 系统上的权限为 `0600`。文件无法保存时拒绝启动，显式配置但格式不合法的 token 也会报错。

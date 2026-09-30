@@ -14,6 +14,13 @@ WSL 的 `/dev/dxg` 与 Mesa D3D12 后端。
 
 ## 使用 GHCR 镜像
 
+也可以通过项目根目录的 [Docker Compose 配置](../../README.md#docker-compose) 启动，包含 CDI GPU 设备、持久化数据、token 健康检查和停止等待时间：
+
+```bash
+docker compose pull
+docker compose up -d --wait
+```
+
 可直接拉取 GitHub Actions 发布的 amd64 镜像，无需本地构建：
 
 ```bash

@@ -1,0 +1,49 @@
+services:
+  browser-recorder:
+    image: ${IMAGE:-ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia}
+    platform: linux/amd64
+    restart: unless-stopped
+    # Give in-flight tools and recording finalization time to finish on SIGTERM.
+    stop_grace_period: 3m
+    shm_size: 1gb
+    devices:
+      - nvidia.com/gpu=${GPU:-0}
+    ports:
+      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-3000}:3000"
+    volumes:
+      - type: bind
+        source: ${DATA_DIR:-./artifacts/recordings}
+        target: /data
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: '3000'
+      MCP_TOKEN: ${MCP_TOKEN:-}
+      MCP_ENV_FILE: /data/.env
+      MCP_HOSTC: ${MCP_HOSTC:-0}
+      MCP_SESSION_IDLE_SECONDS: ${MCP_SESSION_IDLE_SECONDS:-1800}
+      GAME_DATA_DIR: /data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - -e
+        - |
+          import {readFile} from 'node:fs/promises';
+          import {parseEnv} from 'node:util';
+          try {
+            const token = process.env.MCP_TOKEN || parseEnv(await readFile(process.env.MCP_ENV_FILE, 'utf8')).MCP_TOKEN;
+            if (!token) throw new Error('Missing token');
+            const response = await fetch('http://127.0.0.1:3000/health', {
+              headers: {Authorization: 'Bearer ' + token},
+              signal: AbortSignal.timeout(5000)
+            });
+            if (!response.ok) throw new Error('Unhealthy response');
+          } catch {
+            console.error('MCP health check failed');
+            process.exit(1);
+          }
+      start_period: 20s
+      interval: 30s
+      timeout: 10s
+      retries: 3

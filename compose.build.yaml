@@ -1,0 +1,9 @@
+services:
+  browser-recorder:
+    image: ${IMAGE:-game-browser-mcp:linux-nvidia}
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: environments/linux-nvidia/Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-ubuntu:24.04}
