@@ -6,20 +6,25 @@
 
 基于 Chrome DevTools MCP 的浏览器操作与录制服务。外部 agent 通过带 token 认证的 HTTP 入口连接：浏览器工具交给 `chrome-devtools-mcp`，本项目只补充标签页音视频录制。Chrome 的启动、重连、临时 profile 和关闭均由 DevTools 管理；初始化、列工具和健康检查不会启动 Chrome。
 
-## Windows 快速使用
+## Windows 用户：推荐 WSL
 
-复制源码后，在项目根目录执行：
+建议在 WSL 2 的 Linux 环境中运行服务，使用 WSLg 提供 Chrome 所需的图形环境。在 WSL 内准备 Linux 版 Node 22.12+、Chrome/Chromium 和 FFmpeg（含 ffprobe），将源码放在 Linux 文件系统中，然后在项目根目录执行：
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\environments\wslc\build.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\environments\wslc\run.ps1 -Gpu NVIDIA -Port 3000
+```bash
+npm ci
+# 使用 Chromium 或非默认安装位置时，设置 CHROME_PATH 为 Linux 可执行文件路径。
+npm start
 ```
 
-`-Gpu Intel` 可选择 Intel。容器后台运行，不随 agent 退出而停止。首次启动自动生成 token，保存在宿主机 `artifacts/recordings/.env`；等待服务启动后，将其中的 `MCP_TOKEN` 值设置为 `$env:MCP_TOKEN`，用于下面的健康检查和客户端配置。
+首次启动自动生成 token，保存在项目根目录 `.env`。服务启动后，在另一个 WSL 终端中读取其中的 `MCP_TOKEN` 值并设置同名 shell 变量，用于健康检查和客户端配置：
 
-```powershell
-curl.exe -H "Authorization: Bearer $env:MCP_TOKEN" http://127.0.0.1:3000/health
+```bash
+curl -H "Authorization: Bearer $MCP_TOKEN" http://127.0.0.1:3000/health
 ```
+
+本项目不再提供 Windows PowerShell 包装脚本。已有 wslc 环境仍可使用保留的镜像、D3D12 GPU 配置和手动命令，见 [wslc 部署说明](environments/wslc/README.md)。下方原生 Linux NVIDIA 容器使用另一套 GPU 配置，不应直接视作 WSL 部署步骤。
+
+## 连接客户端
 
 外部 agent 使用支持 Streamable HTTP 的 MCP 配置，示例如下（字段格式以客户端要求为准）：
 
@@ -35,9 +40,7 @@ curl.exe -H "Authorization: Bearer $env:MCP_TOKEN" http://127.0.0.1:3000/health
 }
 ```
 
-其他机器上的 agent 将 `127.0.0.1` 替换为 Windows 主机的可达地址。外部 agent 不需要安装 Node、Chrome、FFmpeg 或启动 MCP 进程。服务要求 `Authorization: Bearer <MCP_TOKEN>`；将示例中的占位符替换为服务端配置的 token。`Mcp-Session-Id` 仅用于协议会话路由。
-
-详细构建参数和数据目录见 [Windows wslc 部署说明](environments/wslc/README.md)。
+其他机器上的 agent 将 `127.0.0.1` 替换为服务的可达地址；WSL 的远程访问还需按实际网络环境配置。也可使用下文的 hostc 隧道。外部 agent 不需要安装 Node、Chrome、FFmpeg 或启动 MCP 进程。服务要求 `Authorization: Bearer <MCP_TOKEN>`；将示例中的占位符替换为服务端配置的 token。`Mcp-Session-Id` 仅用于协议会话路由。
 
 ## 原生 Linux + NVIDIA
 
@@ -65,16 +68,6 @@ GPU=0 PORT=3000 ./environments/linux-nvidia/run.sh
 export MCP_TOKEN="$(openssl rand -hex 32)"
 ```
 
-Windows PowerShell 可生成 32 字节随机 token（不依赖 Node）：
-
-```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($bytes)
-$rng.Dispose()
-$env:MCP_TOKEN = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
-```
-
 启用隧道（未配置 token 时也会自动生成并保存）：
 
 ```bash
@@ -84,10 +77,7 @@ MCP_HOSTC=1 ./environments/linux-nvidia/run.sh
 MCP_HOSTC=1 npm start
 ```
 
-```powershell
-# Windows wslc 容器
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\environments\wslc\run.ps1 -Hostc
-```
+wslc 容器在手动 `wslc run` 命令中添加 `-e MCP_HOSTC=1`，详见其部署说明。
 
 从 `docker logs -f browser-recorder-mcp`、`wslc logs -f browser-recorder-mcp` 或本机服务输出读取 hostc 实际打印的 HTTPS 地址，在其末尾加 `/mcp` 作为客户端 URL；仍须配置上述 Authorization 请求头。`/health` 同样要求 token。公网连接使用 HTTPS，token 不要放进 URL。
 
@@ -178,7 +168,7 @@ flowchart LR
 | GAME_DATA_DIR | 项目内 `artifacts/recordings`；容器默认 `/data` |
 | FFMPEG_PATH / FFPROBE_PATH | `ffmpeg` / `ffprobe`；可指定完整路径 |
 
-工具代码位于 `src/`，录制扩展位于 `extension/`，各平台的 GPU/显示配置位于 `environments/`（Windows 为 `wslc/`，原生 Linux 为 `linux-nvidia/`）。独立运行工具需要 Node 22.12+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
+工具代码位于 `src/`，录制扩展位于 `extension/`，容器的 GPU/显示配置位于 `environments/`（wslc 为 `wslc/`，原生 Linux NVIDIA 为 `linux-nvidia/`）。WSL 内直接运行无需容器配置。独立运行工具需要 Node 22.12+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
 
 Chrome 使用独立临时 profile，由 DevTools 启动和关闭，不接管日常浏览器。通用工具不硬编码 GPU 后端；wslc 镜像设置 D3D12 和 Weston，linux-nvidia 镜像使用 NVIDIA 原生 EGL 和 Weston。原始录制分片通过独立的容器内回环服务上传，不对外开放该内部端口。
 
@@ -195,14 +185,13 @@ Chrome 使用独立临时 profile，由 DevTools 启动和关闭，不接管日�
 
 [fixtures/click-game.html](fixtures/click-game.html) 是测试素材：包含移动目标、开始按钮、点击计分，以及周期性闪白和提示音。它不是实际游戏，仅在 `GAME_TEST_FIXTURES=1` 时由服务提供访问，正常运行无需开启。
 
-Windows 执行入口为 [test.ps1](environments/wslc/test.ps1)：它启动独立测试容器，由 [smoke.sh](environments/wslc/smoke.sh) 启动 HTTP 服务、启用测试页面，再运行 `test/e2e.mjs`。先构建镜像，然后在项目根目录执行：
+原生 Linux NVIDIA 环境先构建镜像，然后在项目根目录执行：
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\environments\wslc\test.ps1 -Gpu NVIDIA
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\environments\wslc\test.ps1 -Gpu Intel
+```bash
+GPU=0 ./environments/linux-nvidia/test.sh
 ```
 
-默认产物保存在 `artifacts/wslc-test/`，包含录像、截图、媒体信息和服务日志；可通过 `-DataDir` 指定其他目录。测试结束后会关闭服务并删除测试容器，挂载目录中的产物会保留。
+默认产物保存在 `artifacts/linux-nvidia-test/`，可通过 `DATA_DIR` 指定其他目录。wslc 环境使用[手动测试命令](environments/wslc/README.md#测试)。两种容器测试均由各自的 `smoke.sh` 启动 HTTP 服务、启用测试页面，再运行 `test/e2e.mjs`；测试结束后关闭服务并删除测试容器，挂载目录中的录像、截图、媒体信息和日志会保留。
 
 也可以对已启用测试页面的独立 HTTP 服务运行 `E2E_SERVER_URL` 指向该服务的 `npm run test:e2e`，同时设置与服务相同的 `MCP_TOKEN`。该测试会操作浏览器并录制，应使用没有活动会话、尚未启动 Chrome 的测试服务。它验证基础操作与媒体流，不测量复杂游戏性能或精确音画同步误差。
 

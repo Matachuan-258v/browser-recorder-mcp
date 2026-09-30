@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {loadConfig} from '../src/config.mjs';
 await loadConfig();
 if(!process.env.E2E_SERVER_URL){
- console.error('Run environments/wslc/test.ps1, or set E2E_SERVER_URL for an HTTP MCP service.');
+ console.error('Set E2E_SERVER_URL for an HTTP MCP test service. See README.md for container test commands.');
  process.exit(2);
 }
 const url=new URL(process.env.E2E_SERVER_URL);
