@@ -42,6 +42,8 @@ IMAGE=ghcr.io/matachuan-258v/browser-recorder-mcp:linux-nvidia GPU=0 PORT=3000 D
 docker build -f environments/linux-nvidia/Dockerfile -t game-browser-mcp:linux-nvidia .
 ```
 
+镜像包含 Noto CJK 字体（`fonts-noto-cjk`），支持中文、日文和韩文页面的显示、截图及录制。
+
 固定 Node 24.21.0 和 Chrome 153.0.8010.52-1，Node 校验官方 SHA256 清单。基础镜像
 `ubuntu:24.04` 的 tag 和 apt 软件包未完全锁定快照。
 

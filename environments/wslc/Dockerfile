@@ -15,6 +15,11 @@ RUN test "$(dpkg --print-architecture)" = amd64 \
  && apt-get install -y --no-install-recommends /tmp/chrome.deb \
  && rm -f /tmp/chrome.deb \
  && rm -rf /var/lib/apt/lists/*
+# Chrome needs CJK glyphs for page text, screenshots and recordings.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk \
+ && fc-cache -f \
+ && rm -rf /var/lib/apt/lists/*
 RUN cd /tmp \
  && curl -fLO --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
  && curl -fL --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o SHASUMS256.txt \

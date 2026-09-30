@@ -8,6 +8,8 @@
 
 容器自带 Node 24.21.0；源码运行要求 Node 24+。项目直接使用原生资源管理接口，不再支持 Node 22 及更早版本。
 
+两个容器镜像均包含 Noto CJK 字体，用于中文、日文和韩文页面的显示、截图及录制。直接在 WSL/Linux 中运行源码时，也需安装 CJK 字体，例如 `sudo apt-get install fonts-noto-cjk`。
+
 ## Windows 用户：推荐 WSL
 
 建议在 WSL 2 的 Linux 环境中运行服务，使用 WSLg 提供 Chrome 所需的图形环境。在 WSL 内准备 Linux 版 Node 24+、Chrome/Chromium 和 FFmpeg（含 ffprobe），将源码放在 Linux 文件系统中，然后在项目根目录执行：
@@ -262,7 +264,7 @@ Chrome 使用独立临时 profile，由 DevTools 启动和关闭，不接管日�
 5. 检查重复停止、再次录制和到时自动保存。
 6. 使用官方 `screencast_*` 录制纯视频，确认两种录制互斥。
 
-[fixtures/click-game.html](fixtures/click-game.html) 是测试素材：包含移动目标、开始按钮、点击计分，以及周期性闪白和提示音。它不是实际游戏，仅在 `GAME_TEST_FIXTURES=1` 时由服务提供访问，正常运行无需开启。
+[fixtures/click-game.html](fixtures/click-game.html) 是测试素材：包含移动目标、开始按钮、点击计分、中文字体样例，以及周期性闪白和提示音。它不是实际游戏，仅在 `GAME_TEST_FIXTURES=1` 时由服务提供访问，正常运行无需开启。
 
 原生 Linux NVIDIA 环境先构建镜像，然后在项目根目录执行：
 
