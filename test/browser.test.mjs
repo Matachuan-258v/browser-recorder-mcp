@@ -1,6 +1,20 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {devtoolsOptions} from '../src/devtools.mjs';
+test('DevTools uses native resource disposal provided by Node 24+',async()=>{
+ for(const name of ['DisposableStack','AsyncDisposableStack','SuppressedError']){
+  assert.equal(typeof globalThis[name],'function',`${name} requires Node 24+`);
+  assert.match(Function.prototype.toString.call(globalThis[name]),/\[native code\]/);
+ }
+ const released=[];
+ const stack=new DisposableStack();
+ stack.defer(()=>released.push('sync'));
+ stack.dispose();
+ const asyncStack=new AsyncDisposableStack();
+ asyncStack.defer(async()=>released.push('async'));
+ await asyncStack.disposeAsync();
+ assert.deepEqual(released,['sync','async']);
+});
 test('DevTools owns an isolated Chrome with all public tool categories enabled',()=>{
  const opts=devtoolsOptions({});
  assert.equal(opts.channel,'stable');assert.equal(opts.isolated,true);assert.equal(opts.categoryExtensions,true);

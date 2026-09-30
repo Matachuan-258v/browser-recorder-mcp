@@ -28,7 +28,7 @@ wslc build -f environments/wslc/Dockerfile -t game-browser-mcp:wslc .
 
 基础镜像默认 `docker.1ms.run/ubuntu:24.04`；apt 使用清华镜像，npm 使用 npmmirror。Chrome 和 Node 从官方地址下载，仅在构建时安装。
 
-固定 Node 22.14.0 和 Chrome 153.0.8010.52-1，Node 校验官方 SHA256 清单。若上游移除指定 Chrome 历史包，构建会报错，需要显式更新 CHROME_VERSION 并重新验证。基础镜像 tag 和 apt 软件包未完全锁定快照。
+固定 Node 24.21.0 和 Chrome 153.0.8010.52-1，Node 校验官方 SHA256 清单。若上游移除指定 Chrome 历史包，构建会报错，需要显式更新 CHROME_VERSION 并重新验证。基础镜像 tag 和 apt 软件包未完全锁定快照。
 
 ## 启动常驻服务
 

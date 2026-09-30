@@ -2,7 +2,7 @@ ARG BASE_IMAGE=docker.1ms.run/ubuntu:24.04
 FROM ${BASE_IMAGE}
 
 # Windows/WSLC amd64 + D3D12 environment.
-ARG NODE_VERSION=22.14.0
+ARG NODE_VERSION=24.21.0
 ARG CHROME_VERSION=153.0.8010.52-1
 ARG APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu/
 ARG NPM_REGISTRY=https://registry.npmmirror.com

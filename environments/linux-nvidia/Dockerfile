@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 # Native Linux amd64 + NVIDIA proprietary driver environment.
 # GPU access comes from the NVIDIA Container Toolkit (CDI or the nvidia runtime);
 # the driver libraries are injected by the runtime, never installed here.
-ARG NODE_VERSION=22.14.0
+ARG NODE_VERSION=24.21.0
 ARG CHROME_VERSION=153.0.8010.52-1
 ENV DEBIAN_FRONTEND=noninteractive
 RUN test "$(dpkg --print-architecture)" = amd64 \

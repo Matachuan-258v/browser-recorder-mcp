@@ -6,9 +6,11 @@
 
 基于 Chrome DevTools MCP 的浏览器操作与录制服务。外部 agent 通过带 token 认证的 HTTP 入口连接：浏览器工具交给 `chrome-devtools-mcp`，本项目只补充标签页音视频录制。Chrome 的启动、重连、临时 profile 和关闭均由 DevTools 管理；初始化、列工具和健康检查不会启动 Chrome。
 
+容器自带 Node 24.21.0；源码运行要求 Node 24+。项目直接使用原生资源管理接口，不再支持 Node 22 及更早版本。
+
 ## Windows 用户：推荐 WSL
 
-建议在 WSL 2 的 Linux 环境中运行服务，使用 WSLg 提供 Chrome 所需的图形环境。在 WSL 内准备 Linux 版 Node 22.12+、Chrome/Chromium 和 FFmpeg（含 ffprobe），将源码放在 Linux 文件系统中，然后在项目根目录执行：
+建议在 WSL 2 的 Linux 环境中运行服务，使用 WSLg 提供 Chrome 所需的图形环境。在 WSL 内准备 Linux 版 Node 24+、Chrome/Chromium 和 FFmpeg（含 ffprobe），将源码放在 Linux 文件系统中，然后在项目根目录执行：
 
 ```bash
 npm ci
@@ -56,7 +58,7 @@ GPU=0 PORT=3000 ./environments/linux-nvidia/run.sh
 
 ## GHCR 镜像与自动发布
 
-[镜像工作流](.github/workflows/images.yml) 先使用 Node 22.14.0 运行 `npm test`，通过后分别构建 `linux-nvidia` 和 `wslc` 两个 `linux/amd64` 镜像，发布到 `ghcr.io/matachuan-258v/browser-recorder-mcp`。PR 只测试和构建，不发布。普通 GitHub runner 不提供 NVIDIA/WSL GPU，工作流不运行 GPU 端到端测试。
+[镜像工作流](.github/workflows/images.yml) 先使用 Node 24.21.0 运行 `npm test`，通过后分别构建 `linux-nvidia` 和 `wslc` 两个 `linux/amd64` 镜像，发布到 `ghcr.io/matachuan-258v/browser-recorder-mcp`。PR 只测试和构建，不发布。普通 GitHub runner 不提供 NVIDIA/WSL GPU，工作流不运行 GPU 端到端测试。
 
 | 触发方式 | 发布标签示例 |
 | --- | --- |
@@ -245,7 +247,7 @@ flowchart LR
 | GAME_DATA_DIR | 项目内 `artifacts/recordings`；容器默认 `/data` |
 | FFMPEG_PATH / FFPROBE_PATH | `ffmpeg` / `ffprobe`；可指定完整路径 |
 
-工具代码位于 `src/`，录制扩展位于 `extension/`，容器的 GPU/显示配置位于 `environments/`（wslc 为 `wslc/`，原生 Linux NVIDIA 为 `linux-nvidia/`）。WSL 内直接运行无需容器配置。独立运行工具需要 Node 22.12+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
+工具代码位于 `src/`，录制扩展位于 `extension/`，容器的 GPU/显示配置位于 `environments/`（wslc 为 `wslc/`，原生 Linux NVIDIA 为 `linux-nvidia/`）。WSL 内直接运行无需容器配置。独立运行工具需要 Node 24+、Chrome、FFmpeg，以及适当的显示环境。启动命令 `npm start` 默认运行 HTTP 服务。
 
 Chrome 使用独立临时 profile，由 DevTools 启动和关闭，不接管日常浏览器。通用工具不硬编码 GPU 后端；wslc 镜像设置 D3D12 和 Weston，linux-nvidia 镜像使用 NVIDIA 原生 EGL 和 Weston。原始录制分片通过独立的容器内回环服务上传，不对外开放该内部端口。
 
